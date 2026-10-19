@@ -1,0 +1,248 @@
+// Prisma schema for ThueRadar Phase 2
+// This schema is prepared but migrations must NOT be run automatically.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  REVIEWER
+  ADMIN
+}
+
+enum DocumentStatus {
+  DRAFT
+  IN_REVIEW
+  VERIFIED
+  ARCHIVED
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
+enum AiFeedbackKind {
+  RATING
+  REPORT
+}
+
+enum ModerationStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         UserRole  @default(USER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+  documents    Document[]
+  auditEvents  AuditEvent[]
+  savedDocuments SavedDocument[]
+  documentVersions DocumentVersion[]
+  topicFollows TopicFollow[]
+  notifications Notification[]
+  aiAnswers AiAnswer[]
+  aiFeedback AiFeedback[]
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}
+
+model Source {
+  id         String    @id @default(cuid())
+  name       String
+  url        String?
+  isOfficial Boolean   @default(false)
+  verifiedAt DateTime?
+  adapterKey String?   @unique
+  robotsUrl  String?
+  accessPolicyUrl String?
+  documents  Document[]
+  ingestionRuns IngestionRun[]
+}
+
+model Document {
+  id          String         @id @default(cuid())
+  title       String
+  content     String?
+  documentNumber String?
+  documentType String?
+  issuingAuthority String?
+  taxTopic    String?
+  summary     String?
+  keywords    String[]       @default([])
+  effectiveAt DateTime?
+  externalId  String?
+  checksum    String?
+  sourceUpdatedAt DateTime?
+  status      DocumentStatus @default(DRAFT)
+  owner       User?          @relation(fields: [ownerId], references: [id])
+  ownerId     String?
+  source      Source?        @relation(fields: [sourceId], references: [id])
+  sourceId    String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  auditEvents AuditEvent[]
+  versions    DocumentVersion[]
+  savedBy     SavedDocument[]
+
+  @@index([status, effectiveAt])
+  @@index([taxTopic, documentType])
+  @@index([ownerId, updatedAt])
+  @@unique([sourceId, externalId])
+}
+
+model TopicFollow {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  topic     String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, topic])
+  @@index([topic, createdAt])
+}
+
+model Notification {
+  id        String             @id @default(cuid())
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  title     String
+  message   String
+  link      String?
+  status    NotificationStatus @default(UNREAD)
+  metadata  Json?
+  createdAt DateTime           @default(now())
+  readAt    DateTime?
+
+  @@index([userId, status, createdAt])
+}
+
+model AiAnswer {
+  id          String        @id @default(cuid())
+  user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId      String?
+  question    String
+  answer      String
+  citations   Json
+  createdAt   DateTime      @default(now())
+  feedback    AiFeedback[]
+
+  @@index([userId, createdAt])
+}
+
+model AiFeedback {
+  id          String           @id @default(cuid())
+  answer      AiAnswer         @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  answerId    String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  kind        AiFeedbackKind
+  rating      Int?
+  reason      String?
+  details     String?
+  status      ModerationStatus @default(OPEN)
+  reviewedById String?
+  reviewedAt  DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@unique([answerId, userId, kind])
+  @@index([status, createdAt])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  metadata  Json?
+  document  Document? @relation(fields: [documentId], references: [id])
+  documentId String?
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+  createdAt DateTime @default(now())
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+  version    Int
+  title      String
+  content    String?
+  metadata   Json?
+  createdBy  User?    @relation(fields: [createdById], references: [id])
+  createdById String?
+  createdAt  DateTime @default(now())
+
+  @@unique([documentId, version])
+  @@index([documentId, createdAt])
+}
+
+model SavedDocument {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, documentId])
+  @@index([userId, createdAt])
+}
+
+model IngestionRun {
+  id            String   @id @default(cuid())
+  source        Source   @relation(fields: [sourceId], references: [id])
+  sourceId      String
+  adapterKey    String
+  mode          String
+  status        String
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+  discovered    Int      @default(0)
+  fetched       Int      @default(0)
+  created       Int      @default(0)
+  updated       Int      @default(0)
+  skipped       Int      @default(0)
+  failed        Int      @default(0)
+  log           Json?
+
+  @@index([sourceId, startedAt])
+}
+
+model SchedulerRun {
+  id          String   @id @default(cuid())
+  runKey      String   @unique
+  trigger     String
+  status      String
+  attempt     Int      @default(1)
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  error       String?
+  metadata    Json?
+
+  @@index([startedAt, status])
+}
+
+// Add common indexes
+
+// NOTE: Do NOT run migrations automatically from this environment. Follow docs/DB_SETUP.md for safe migration guidance.
