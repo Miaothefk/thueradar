@@ -180,7 +180,7 @@ async function extractPdfText(bytes) {
   }
 }
 
-async function fetchWithRetry(url) {
+async function fetchWithRetry(url, requestInit = {}) {
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
@@ -188,7 +188,11 @@ async function fetchWithRetry(url) {
     try {
       const response = await fetch(url, {
         signal: controller.signal,
-        headers: { "User-Agent": "ThueRadarResearchBot/0.1 (+legal-source-review)" },
+        ...requestInit,
+        headers: {
+          "User-Agent": "ThueRadarResearchBot/0.1 (+legal-source-review)",
+          ...(requestInit.headers || {}),
+        },
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.text();
@@ -200,6 +204,17 @@ async function fetchWithRetry(url) {
     }
   }
   throw lastError;
+}
+
+async function fetchListPage(page) {
+  if (!SOURCE.isVietnamese || page === 1) return fetchWithRetry(SOURCE.url);
+  return fetchWithRetry(SOURCE.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ page: String(page), cmd: "" }),
+  });
 }
 
 async function checkRobots() {
@@ -251,11 +266,16 @@ async function main() {
 
   const discovered = [];
   for (let page = 1; page <= maxPages && discovered.length < maxItems; page += 1) {
-    const html = await fetchWithRetry(SOURCE.url);
+    const html = await fetchListPage(page);
+    let pageCount = 0;
     for (const record of parseListPage(html)) {
-      if (!discovered.some((item) => item.url === record.url)) discovered.push(record);
+      if (!discovered.some((item) => item.url === record.url)) {
+        discovered.push(record);
+        pageCount += 1;
+      }
       if (discovered.length >= maxItems) break;
     }
+    log("page_fetched", { page, discovered: pageCount });
     if (page < maxPages) await sleep(delayMs);
   }
   log("items_discovered", { count: discovered.length });
