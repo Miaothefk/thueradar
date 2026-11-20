@@ -9,6 +9,7 @@ export type RetrievedSource = {
   documentNumber: string | null;
   sourceName: string;
   sourceUrl: string | null;
+  legalStatus: string;
 };
 
 export type RagResponse = {
@@ -27,6 +28,7 @@ export async function retrieveSources(prisma: PrismaClient, question: string, li
   if (!words.length) return [];
   const where: Prisma.DocumentWhereInput = {
     status: "VERIFIED",
+    legalStatus: { notIn: ["EXPIRED", "REPEALED", "SUPERSEDED"] },
     content: { not: null },
     OR: words.flatMap((word) => [
       { title: { contains: word, mode: "insensitive" } },
@@ -41,6 +43,7 @@ export async function retrieveSources(prisma: PrismaClient, question: string, li
     orderBy: [{ effectiveAt: "desc" }, { updatedAt: "desc" }],
     select: {
       id: true, title: true, content: true, documentNumber: true,
+      legalStatus: true,
       source: { select: { name: true, url: true } },
     },
   });
@@ -53,6 +56,7 @@ export async function retrieveSources(prisma: PrismaClient, question: string, li
       documentNumber: document.documentNumber,
       sourceName: document.source?.name || "Nguồn chưa định danh",
       sourceUrl: document.source?.url || null,
+      legalStatus: document.legalStatus,
     }));
 }
 

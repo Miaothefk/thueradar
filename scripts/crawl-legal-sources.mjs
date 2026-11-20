@@ -118,12 +118,28 @@ function parseDetailPage(html, discovered) {
   const expiryDate = SOURCE.isVietnamese
     ? stripHtml(html.match(/<td[^>]*id=["']expiredDate["'][^>]*>([\s\S]*?)<\/td>/i)?.[1] || "")
     : null;
+  const legalEffect = SOURCE.isVietnamese
+    ? stripHtml(html.match(/<td[^>]*id=["']legalEffect["'][^>]*>([\s\S]*?)<\/td>/i)?.[1] || "")
+    : null;
+  const replacement = SOURCE.isVietnamese
+    ? stripHtml(html.match(/<td[^>]*>\s*Thay thế văn bản\s*<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/i)?.[1] || "")
+    : null;
   const attachmentUrl = SOURCE.isVietnamese
     ? absoluteUrl(
       (html.match(/<a[^>]+class=["'][^"']*linkDown[^"']*["'][^>]+href=["']([^"']+)["']/i)?.[1] || "").replace(/&amp;/gi, "&"),
       discovered.url,
     )
     : null;
+  const expiry = expiryDate ? new Date(expiryDate.split("/").reverse().join("-")) : null;
+  const legalStatus = expiry && !Number.isNaN(expiry.getTime()) && expiry <= new Date()
+    ? "EXPIRED"
+    : replacement
+      ? "SUPERSEDED"
+      : /hết hiệu lực|bãi bỏ|không còn hiệu lực/i.test(legalEffect || "")
+        ? "REPEALED"
+        : /còn hiệu lực|đang có hiệu lực/i.test(legalEffect || "")
+          ? "IN_FORCE"
+          : "UNKNOWN";
   return {
     externalId: discovered.url,
     title: title.slice(0, 500),
@@ -136,6 +152,11 @@ function parseDetailPage(html, discovered) {
     sourcePublishedAt: date ? new Date(date.split("/").reverse().join("-")).toISOString() : null,
     effectiveAt: effectiveDate ? new Date(effectiveDate.split("/").reverse().join("-")).toISOString() : null,
     expiredAt: expiryDate ? new Date(expiryDate.split("/").reverse().join("-")).toISOString() : null,
+    legalStatus,
+    validityCheckedAt: new Date().toISOString(),
+    validityEvidenceUrl: discovered.url,
+    validityMethod: legalStatus === "UNKNOWN" ? "OFFICIAL_METADATA_INSUFFICIENT" : "OFFICIAL_METADATA",
+    validityEvidence: { legalEffect, replacement, expiryDate },
     attachmentUrl,
   };
 }
@@ -310,6 +331,8 @@ async function main() {
         documentNumber: document.documentNumber,
         attachmentUrl: document.attachmentUrl,
         contentExtraction: document.contentExtraction,
+        legalStatus: document.legalStatus,
+        validityMethod: document.validityMethod,
         pdfChecksum: document.pdfChecksum,
         checksum: document.checksum,
       });
@@ -360,10 +383,23 @@ async function main() {
           title: item.title, content: item.content, documentNumber: item.documentNumber,
           documentType: item.documentType, issuingAuthority: item.issuingAuthority, taxTopic: item.taxTopic,
           effectiveAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
+          legalStatus: item.legalStatus,
+          validityCheckedAt: new Date(item.validityCheckedAt),
+          validityEvidenceUrl: item.validityEvidenceUrl,
+          validityMethod: item.validityMethod,
           sourceUpdatedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
           externalId: item.externalId, checksum: item.checksum, sourceId: source.id, status: "DRAFT",
         },
-        update: { title: item.title, content: item.content, checksum: item.checksum, sourceUpdatedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null },
+        update: {
+          title: item.title,
+          content: item.content,
+          checksum: item.checksum,
+          legalStatus: item.legalStatus,
+          validityCheckedAt: new Date(item.validityCheckedAt),
+          validityEvidenceUrl: item.validityEvidenceUrl,
+          validityMethod: item.validityMethod,
+          sourceUpdatedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
+        },
       });
       const document = await prisma.document.findUniqueOrThrow({
         where: { sourceId_externalId: { sourceId: source.id, externalId: item.externalId } },
@@ -382,6 +418,9 @@ async function main() {
             sourceUrl: item.sourceUrl,
             attachmentUrl: item.attachmentUrl,
             contentExtraction: item.contentExtraction,
+            legalStatus: item.legalStatus,
+            validityMethod: item.validityMethod,
+            validityEvidence: item.validityEvidence,
             adapterKey: SOURCE.key,
           },
         },

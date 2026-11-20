@@ -34,6 +34,8 @@ Quan sát được:
 - tự tải PDF công khai từ đúng host nguồn và giới hạn dung lượng;
 - trích xuất lớp văn bản PDF bằng `pdf-parse`;
 - lưu `pdfChecksum`, URL file đính kèm và trạng thái `contentExtraction` trong metadata phiên bản;
+- đọc ngày hết hiệu lực, trạng thái hiệu lực và quan hệ thay thế nếu trang chính thức cung cấp;
+- lưu `legalStatus`, bằng chứng kiểm tra, thời điểm kiểm tra và phương pháp kiểm tra;
 - `externalId` theo URL nguồn và versioning qua `DocumentVersion`/checksum;
 - dry-run mặc định;
 - log JSON cho từng sự kiện;
@@ -57,6 +59,16 @@ Dry-run chỉ chứng minh khả năng truy cập/parse tại thời điểm ch�
 - `NO_ATTACHMENT`: trang chi tiết không có file đính kèm.
 
 Crawler không dùng OCR trong bước này để tránh tự suy diễn nội dung từ ảnh. Những văn bản `NO_TEXT_LAYER` phải được đánh dấu để xử lý bổ sung trước khi đưa vào RAG.
+
+Trạng thái hiệu lực được suy luận bảo thủ:
+
+- `IN_FORCE`: nguồn chính thức ghi rõ còn hiệu lực;
+- `EXPIRED`: ngày hết hiệu lực đã qua;
+- `REPEALED`: nguồn ghi rõ hết hiệu lực/bãi bỏ;
+- `SUPERSEDED`: có thông tin văn bản thay thế;
+- `UNKNOWN`: thiếu bằng chứng rõ ràng.
+
+`UNKNOWN` không bị coi là còn hiệu lực. RAG loại trừ `EXPIRED`, `REPEALED` và `SUPERSEDED`, đồng thời yêu cầu AI nói rõ khi nguồn có trạng thái `UNKNOWN`.
 
 ## Live ingestion
 

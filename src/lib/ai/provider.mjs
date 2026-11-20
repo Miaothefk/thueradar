@@ -41,12 +41,13 @@ export function createAiProvider(env = process.env, fetchImpl = fetch) {
     kind: config.kind,
     async generateAnswer({ question, sources }) {
       const sourceContext = sources
-        .map((source) => `[${source.id}] ${source.title}\n${source.content}`)
+        .map((source) => `[${source.id}] ${source.title}\nHiệu lực: ${source.legalStatus || "UNKNOWN"}\n${source.content}`)
         .join("\n\n");
       const system = [
         "Bạn là trợ lý nghiên cứu pháp luật thuế Việt Nam.",
         "Chỉ dùng thông tin trong các nguồn được cung cấp.",
         "Nếu nguồn không đủ, nói rõ chưa đủ bằng chứng và không suy đoán.",
+        "Nếu hiệu lực của nguồn là UNKNOWN, phải nói rõ chưa xác định được hiệu lực và không khẳng định nguồn còn hiệu lực.",
         "Mỗi nhận định pháp lý phải có ít nhất một citation dạng [D1], [D2].",
         "Không tạo citation không tồn tại trong danh sách nguồn.",
       ].join(" ");
