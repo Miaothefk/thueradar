@@ -3,10 +3,17 @@
 import { useEffect, useState } from "react";
 
 type Feedback = { id: string; kind: string; reason: string | null; status: string; answer: { question: string; answer: string }; user: { email: string } };
+type ReviewDocument = {
+  id: string; title: string; documentNumber: string | null; documentType: string | null;
+  issuingAuthority: string | null; content: string | null; status: string; legalStatus: string;
+  validityCheckedAt: string | null; validityEvidenceUrl: string | null; validityMethod: string | null;
+  source: { name: string; url: string | null; isOfficial: boolean } | null;
+};
 
 export default function AdminPage() {
   const [syncMessage, setSyncMessage] = useState("");
   const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [documents, setDocuments] = useState<ReviewDocument[]>([]);
   const [error, setError] = useState("");
 
   async function runSync() {
@@ -21,6 +28,23 @@ export default function AdminPage() {
     const body = await response.json();
     if (response.ok) setFeedback(body.feedback as Feedback[]);
     else setError(body.error || "Không thể tải báo cáo AI.");
+  }
+
+  async function loadDocuments() {
+    const response = await fetch("/api/admin/documents");
+    const body = await response.json();
+    if (response.ok) setDocuments(body.documents as ReviewDocument[]);
+    else setError(body.error || "Không thể tải văn bản cần kiểm duyệt.");
+  }
+
+  async function moderateDocument(id: string, status: "IN_REVIEW" | "VERIFIED") {
+    const response = await fetch(`/api/admin/documents/${id}/moderation`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (response.ok) await loadDocuments();
+    else setError(((await response.json()) as { error?: string }).error || "Không thể cập nhật văn bản.");
   }
 
   async function moderate(id: string, status: "IN_REVIEW" | "RESOLVED" | "DISMISSED") {
@@ -38,6 +62,14 @@ export default function AdminPage() {
       else setError(body.error || "Không thể tải báo cáo AI.");
     }).catch(() => {
       if (active) setError("Không thể tải báo cáo AI.");
+    });
+    void fetch("/api/admin/documents").then(async (response) => {
+      const body = await response.json();
+      if (!active) return;
+      if (response.ok) setDocuments(body.documents as ReviewDocument[]);
+      else setError(body.error || "Không thể tải văn bản cần kiểm duyệt.");
+    }).catch(() => {
+      if (active) setError("Không thể tải văn bản cần kiểm duyệt.");
     });
     return () => { active = false; };
   }, []);
@@ -64,6 +96,30 @@ export default function AdminPage() {
           </ul>
         </section>
       </div>
+      <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">Văn bản chờ kiểm duyệt</h2>
+        <p className="mt-2 text-sm text-slate-600">Chỉ chuyển sang VERIFIED sau khi đã đọc nội dung, kiểm tra nguồn và xem trạng thái hiệu lực.</p>
+        <div className="mt-4 space-y-4">
+          {documents.length === 0 ? <p className="text-sm text-slate-500">Không có văn bản chờ kiểm duyệt.</p> : documents.map((document) => (
+            <article key={document.id} className="rounded-2xl border border-slate-200 p-4">
+              <div className="flex flex-wrap justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold text-slate-900">{document.title}</h3>
+                  <p className="mt-1 text-xs text-slate-500">{document.documentNumber || "Chưa có số hiệu"} · {document.issuingAuthority || "Chưa rõ cơ quan"} · {document.status}</p>
+                </div>
+                <span className="h-fit rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-800">Hiệu lực: {document.legalStatus}</span>
+              </div>
+              <p className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap text-sm text-slate-700">{document.content || "Chưa có nội dung."}</p>
+              <p className="mt-2 text-xs text-slate-500">Phương pháp: {document.validityMethod || "Chưa kiểm tra"}</p>
+              {document.validityEvidenceUrl && <a className="mt-1 block text-xs text-emerald-700 underline" href={document.validityEvidenceUrl} target="_blank" rel="noreferrer">Mở bằng chứng nguồn chính thức</a>}
+              <div className="mt-3 flex gap-2">
+                {document.status === "DRAFT" && <button onClick={() => void moderateDocument(document.id, "IN_REVIEW")} className="rounded-lg border px-3 py-1.5 text-xs">Đưa vào xem xét</button>}
+                <button onClick={() => void moderateDocument(document.id, "VERIFIED")} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Xác minh và công bố</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
       <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold text-slate-900">Báo cáo câu trả lời AI</h2>
         {error && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{error}</p>}
