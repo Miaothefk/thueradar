@@ -8,6 +8,7 @@ const navigation = [
   { label: "Văn bản", href: "/documents" },
   { label: "AI trả lời", href: "/ai" },
   { label: "Quản trị", href: "/admin" },
+  { label: "Đăng nhập", href: "/login" },
 ];
 
 export function SiteHeader() {
