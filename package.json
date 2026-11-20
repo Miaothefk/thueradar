@@ -18,12 +18,13 @@
     "@prisma/client": "^6.17.1",
     "bcryptjs": "^3.0.3",
     "next": "16.4.0",
+    "pdf-parse": "^2.4.5",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "overrides": {
-  "effect": "^3.20.0",
-  "deepmerge-ts": "^8.0.0"
+    "effect": "^3.20.0",
+    "deepmerge-ts": "^8.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
@@ -40,7 +41,6 @@
     "typescript": "^5.9.3"
   },
   "prisma": {
-  "seed": "npx ts-node prisma/seed.js"
-}
+    "seed": "npx ts-node prisma/seed.ts"
   }
-
+}
