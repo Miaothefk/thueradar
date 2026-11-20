@@ -331,7 +331,15 @@ async function main() {
   try {
     const source = await prisma.source.upsert({
       where: { adapterKey: SOURCE.key },
-      create: { ...SOURCE, adapterKey: SOURCE.key, isOfficial: true, verifiedAt: new Date() },
+      create: {
+        name: SOURCE.name,
+        url: SOURCE.url,
+        robotsUrl: SOURCE.robotsUrl,
+        accessPolicyUrl: SOURCE.policyUrl,
+        adapterKey: SOURCE.key,
+        isOfficial: true,
+        verifiedAt: new Date(),
+      },
       update: { name: SOURCE.name, url: SOURCE.url, robotsUrl: SOURCE.robotsUrl, accessPolicyUrl: SOURCE.policyUrl },
     });
     const run = await prisma.ingestionRun.create({
