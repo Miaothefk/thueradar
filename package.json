@@ -17,8 +17,12 @@
   "dependencies": {
     "@prisma/client": "^6.17.1",
     "bcryptjs": "^3.0.3",
+<<<<<<< HEAD
     "next": "16.4.0",
     "pdf-parse": "^2.4.5",
+=======
+    "next": "^16.4.6",
+>>>>>>> 3594bb8 (security: upgrade Next.js 16.4.0 to 16.4.6)
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
@@ -41,6 +45,10 @@
     "typescript": "^5.9.3"
   },
   "prisma": {
+<<<<<<< HEAD
     "seed": "npx ts-node prisma/seed.ts"
+=======
+    "seed": "npx ts-node prisma/seed.js"
+>>>>>>> 3594bb8 (security: upgrade Next.js 16.4.0 to 16.4.6)
   }
 }
