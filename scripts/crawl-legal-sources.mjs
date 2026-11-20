@@ -372,8 +372,11 @@ async function main() {
     let updated = 0;
     let skipped = 0;
     for (const item of items) {
-      const existing = await prisma.document.findUnique({ where: { sourceId_externalId: { sourceId: source.id, externalId: item.externalId } } });
-      if (existing?.checksum === item.checksum) {
+      const existing = await prisma.document.findUnique({
+        where: { sourceId_externalId: { sourceId: source.id, externalId: item.externalId } },
+        select: { id: true, checksum: true, validityCheckedAt: true },
+      });
+      if (existing?.checksum === item.checksum && existing.validityCheckedAt) {
         skipped += 1;
         continue;
       }
