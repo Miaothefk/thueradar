@@ -1,22 +1,17 @@
 import crypto from 'crypto';
+import * as bcrypt from 'bcryptjs';
 import { getPrisma, isDatabaseConfigured } from './prisma';
 
 const SESSION_COOKIE_NAME = 'thueradar_session';
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 export function hashPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const derivedKey = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${derivedKey}`;
+  return bcrypt.hashSync(password, 10);
 }
 
 export function verifyPassword(password: string, stored: string): boolean {
   try {
-    const [salt, key] = stored.split(':');
-    if (!salt || !key) return false;
-    const derived = crypto.scryptSync(password, salt, 64);
-    const original = Buffer.from(key, 'hex');
-    return crypto.timingSafeEqual(derived, original);
+    return bcrypt.compareSync(password, stored);
   } catch {
     return false;
   }
