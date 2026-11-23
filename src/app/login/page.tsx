@@ -25,8 +25,18 @@ export default function LoginPage() {
         setError(body.error || "Đăng nhập không thành công.");
         return;
       }
-      router.push("/admin");
-      router.refresh();
+      const accountResponse = await fetch("/api/auth/me");
+      const accountBody = (await accountResponse.json()) as { user?: { role?: string } | null };
+      if (accountBody.user?.role === "ADMIN") {
+        router.push("/admin");
+        router.refresh();
+      } else if (accountBody.user?.role === "REVIEWER") {
+        router.push("/documents");
+        router.refresh();
+      } else {
+        router.push("/");
+        router.refresh();
+      }
     } catch {
       setError("Không thể kết nối đến máy chủ.");
     } finally {

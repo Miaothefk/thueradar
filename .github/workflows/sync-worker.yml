@@ -28,7 +28,12 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Run Sync Worker
-        run: node scripts/sync-worker.mjs --scheduled
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            node scripts/sync-worker.mjs --manual
+          else
+            node scripts/sync-worker.mjs --scheduled
+          fi
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SOURCE_ACCESS_APPROVED: "1"

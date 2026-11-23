@@ -10,6 +10,8 @@ export default function AiPage() {
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
 
   async function ask(event: FormEvent) {
     event.preventDefault();
@@ -41,13 +43,13 @@ export default function AiPage() {
         <h1 className="mt-2 text-3xl font-bold text-slate-900">Hỏi đáp pháp luật thuế theo hướng dẫn RAG</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Câu trả lời chỉ được hiển thị khi truy hồi được văn bản đã xác minh và vượt qua kiểm tra citation. Hệ thống không tự tạo nguồn thay thế.</p>
       </div>
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-3xl border border-slate-300 bg-white p-6 shadow-md">
         <form onSubmit={ask}>
-          <label htmlFor="question" className="text-sm font-semibold text-slate-700">Câu hỏi pháp lý</label>
-          <textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ví dụ: Quy định nào trong các văn bản đã lưu liên quan đến…?" className="mt-2 min-h-32 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm outline-none focus:border-emerald-500 focus:bg-white" />
+          <label htmlFor="question" className="text-sm font-bold text-slate-800">Câu hỏi pháp lý</label>
+          <textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ví dụ: Quy định nào trong các văn bản đã lưu liên quan đến…?" className="mt-2 min-h-32 w-full resize-y rounded-2xl border border-slate-300 bg-slate-50 p-4 text-sm text-slate-950 placeholder:text-slate-500 outline-none focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-100" />
           <div className="mt-3 flex items-center justify-between gap-4">
-            <p className="text-xs text-slate-500">AI provider chạy phía server; API key không được gửi xuống trình duyệt.</p>
-            <button type="submit" disabled={loading || !question.trim()} className="rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300">{loading ? "Đang kiểm tra…" : "Gửi câu hỏi"}</button>
+            <p className="text-xs font-medium text-slate-600">AI provider chạy phía server; API key không được gửi xuống trình duyệt.</p>
+            <button type="submit" disabled={loading || !question.trim()} className="shrink-0 rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300">{loading ? "Đang kiểm tra…" : "Gửi câu hỏi"}</button>
           </div>
         </form>
         {result && (
@@ -56,7 +58,18 @@ export default function AiPage() {
               <p className="font-semibold">{result.status === "ANSWERED" ? "Câu trả lời có citation" : result.status === "NO_EVIDENCE" ? "Chưa đủ bằng chứng" : result.status === "PROVIDER_NOT_CONFIGURED" ? "AI provider chưa cấu hình" : "Chưa thể trả lời"}</p>
               <p className="mt-2 whitespace-pre-line">{result.answer || result.error}</p>
             </div>
-            {result.answerId && result.status === "ANSWERED" && <div className="rounded-2xl border border-slate-200 p-4 text-sm"><p className="font-semibold text-slate-800">Đánh giá câu trả lời</p><div className="mt-3 flex flex-wrap gap-2">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} onClick={() => void sendFeedback("RATING", { rating })} className="rounded-lg border border-slate-200 px-3 py-1.5 hover:border-emerald-500">{rating}/5</button>)}<button onClick={() => { const reason = window.prompt("Lý do báo cáo câu trả lời?"); if (reason) void sendFeedback("REPORT", { reason }); }} className="rounded-lg border border-amber-200 px-3 py-1.5 text-amber-800 hover:bg-amber-50">Báo cáo</button></div>{feedbackMessage && <p className="mt-2 text-slate-600">{feedbackMessage}</p>}</div>}
+            {result.answerId && result.status === "ANSWERED" && (
+              <div className="rounded-2xl border border-slate-300 bg-slate-50 p-4 text-sm">
+                <p className="font-bold text-slate-900">Đánh giá câu trả lời</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <button key={rating} type="button" onClick={() => void sendFeedback("RATING", { rating })} className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800 shadow-sm hover:border-emerald-600 hover:text-emerald-800">{rating}/5</button>
+                  ))}
+                  <button type="button" onClick={() => setReportOpen(true)} className="rounded-lg border border-amber-300 bg-white px-3 py-2 font-semibold text-amber-900 shadow-sm hover:bg-amber-50">Báo cáo</button>
+                </div>
+                {feedbackMessage && <p className="mt-3 rounded-lg bg-white px-3 py-2 font-medium text-slate-700">{feedbackMessage}</p>}
+              </div>
+            )}
             {!!result.citations?.length && (
               <section>
                 <h2 className="text-lg font-semibold text-slate-900">Nguồn được truy hồi</h2>
@@ -68,6 +81,36 @@ export default function AiPage() {
           </div>
         )}
       </div>
+      {reportOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="report-title">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <h2 id="report-title" className="text-lg font-bold text-slate-950">Báo cáo câu trả lời</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Mô tả ngắn nội dung chưa chính xác, thiếu nguồn hoặc chưa phù hợp với nhu cầu của bạn.</p>
+            <label htmlFor="report-reason" className="mt-4 block text-sm font-bold text-slate-800">Lý do</label>
+            <textarea
+              id="report-reason"
+              value={reportReason}
+              onChange={(event) => setReportReason(event.target.value)}
+              className="mt-2 min-h-28 w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-sm text-slate-950 focus:border-amber-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-amber-100"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => { setReportOpen(false); setReportReason(""); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Hủy</button>
+              <button
+                type="button"
+                disabled={!reportReason.trim()}
+                onClick={() => {
+                  void sendFeedback("REPORT", { reason: reportReason.trim() });
+                  setReportOpen(false);
+                  setReportReason("");
+                }}
+                className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Gửi báo cáo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
