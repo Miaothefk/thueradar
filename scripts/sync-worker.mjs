@@ -9,6 +9,8 @@ const SCHEDULE_HOUR = Number.parseInt(process.env.SYNC_SCHEDULE_HOUR || "2", 10)
 const maxRetries = Math.max(1, Number.parseInt(process.env.SYNC_MAX_RETRIES || "3", 10) || 3);
 const retryDelayMs = Math.max(1000, Number.parseInt(process.env.SYNC_RETRY_DELAY_MS || "5000", 10) || 5000);
 const maxItems = Math.max(1, Number.parseInt(process.env.SYNC_MAX_ITEMS || "20", 10) || 20);
+const crawlerTimeoutMs = Math.max(1000, Number.parseInt(process.env.CRAWLER_TIMEOUT_MS || "60000", 10) || 60000);
+const crawlerRetries = Math.max(0, Number.parseInt(process.env.CRAWLER_RETRIES || "2", 10) || 2);
 const isScheduled = process.argv.includes("--scheduled");
 const isManual = process.argv.includes("--manual");
 
@@ -33,7 +35,13 @@ function sleep(ms) {
 
 function runCrawler() {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["scripts/crawl-legal-sources.mjs", "--live", `--max-items=${maxItems}`], {
+    const child = spawn(process.execPath, [
+      "scripts/crawl-legal-sources.mjs",
+      "--live",
+      `--max-items=${maxItems}`,
+      `--timeout-ms=${crawlerTimeoutMs}`,
+      `--retries=${crawlerRetries}`,
+    ], {
       cwd: process.cwd(),
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
