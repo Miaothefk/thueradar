@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { PDFParse } from "pdf-parse";
 
@@ -61,6 +62,58 @@ const publicBrowserHeaders = {
   "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
   "Referer": "https://gdt.gov.vn/",
 };
+
+function fetchThroughCurl(url, binary = false, requestInit = {}) {
+  return new Promise((resolve, reject) => {
+    const requestBody = typeof requestInit.body === "string"
+      ? requestInit.body
+      : requestInit.body instanceof URLSearchParams
+        ? requestInit.body.toString()
+        : "";
+    const contentType = requestInit.headers?.["Content-Type"];
+    const args = [
+      "--location",
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--max-time",
+      String(Math.ceil(timeoutMs / 1000)),
+      "--compressed",
+      "--user-agent",
+      publicBrowserHeaders["User-Agent"],
+      "--header",
+      `Accept: ${publicBrowserHeaders.Accept}`,
+      "--header",
+      `Accept-Language: ${publicBrowserHeaders["Accept-Language"]}`,
+      "--header",
+      `Referer: ${publicBrowserHeaders.Referer}`,
+      ...(requestInit.method && requestInit.method !== "GET"
+        ? ["--request", requestInit.method]
+        : []),
+      ...(typeof requestInit.body === "string"
+        ? ["--data", requestInit.body]
+        : requestInit.body instanceof URLSearchParams
+          ? ["--data", requestBody]
+        : []),
+      ...(contentType ? ["--header", `Content-Type: ${contentType}`] : []),
+      url,
+    ];
+    const child = spawn("curl", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const chunks = [];
+    const stderrChunks = [];
+    child.stdout.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    child.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`curl HTTP failure (${code}): ${Buffer.concat(stderrChunks).toString("utf8").trim()}`));
+        return;
+      }
+      const bytes = Buffer.concat(chunks);
+      resolve(binary ? bytes : bytes.toString("utf8"));
+    });
+  });
+}
 
 function stripHtml(value) {
   return value
@@ -195,7 +248,15 @@ async function fetchBinaryWithRetry(url) {
       clearTimeout(timer);
     }
   }
-  throw lastError;
+  try {
+    const bytes = await fetchThroughCurl(url, true);
+    if (bytes.length > maxPdfBytes) throw new Error(`PDF exceeds ${maxPdfBytes} bytes`);
+    const signature = bytes.subarray(0, 5).toString("ascii");
+    if (!signature.startsWith("%PDF")) throw new Error("Attachment returned data that is not a PDF");
+    return bytes;
+  } catch (curlError) {
+    throw curlError instanceof Error ? curlError : lastError;
+  }
 }
 
 async function extractPdfText(bytes) {
@@ -231,7 +292,11 @@ async function fetchWithRetry(url, requestInit = {}) {
       clearTimeout(timer);
     }
   }
-  throw lastError;
+  try {
+    return await fetchThroughCurl(url, false, requestInit);
+  } catch (curlError) {
+    throw curlError instanceof Error ? curlError : lastError;
+  }
 }
 
 async function fetchListPage(page) {
