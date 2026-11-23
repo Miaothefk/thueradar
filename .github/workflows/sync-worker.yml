@@ -39,4 +39,6 @@ jobs:
           SOURCE_ACCESS_APPROVED: "1"
           SYNC_TIMEZONE: "Asia/Ho_Chi_Minh"
           SYNC_SCHEDULE_HOUR: "2"
+          CRAWLER_TIMEOUT_MS: "60000"
+          CRAWLER_RETRIES: "2"
           NODE_OPTIONS: "--use-system-ca"
