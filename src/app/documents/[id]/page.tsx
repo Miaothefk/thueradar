@@ -12,6 +12,11 @@ type DocumentDetail = {
   issuingAuthority: string | null;
   taxTopic: string | null;
   summary: string | null;
+  changeSummary: string | null;
+  highlights: string[];
+  replacedDocumentNumber: string | null;
+  replacementDocumentNumber: string | null;
+  legalStatus: string;
   keywords: string[];
   status: string;
   effectiveAt: string | null;
@@ -81,7 +86,27 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
             <div className="rounded-2xl bg-slate-50 p-4"><dt className="text-slate-400">Nhóm thuế</dt><dd className="mt-1 font-medium text-slate-800">{document.taxTopic || "Chưa có"}</dd></div>
             <div className="rounded-2xl bg-slate-50 p-4"><dt className="text-slate-400">Hiệu lực</dt><dd className="mt-1 font-medium text-slate-800">{document.effectiveAt ? new Date(document.effectiveAt).toLocaleDateString("vi-VN") : "Chưa có"}</dd></div>
           </dl>
-          <section className="mt-8"><h2 className="text-lg font-semibold text-slate-900">Tóm tắt</h2><p className="mt-3 text-slate-700">{document.summary || "Chưa có tóm tắt được xác minh."}</p></section>
+          <section className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-slate-900">Tóm tắt</h2>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">Hiệu lực: {document.legalStatus}</span>
+            </div>
+            <p className="mt-3 leading-7 text-slate-800">{document.summary || "Chưa có tóm tắt được AI xác minh."}</p>
+          </section>
+          <section className="mt-8 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 p-5">
+              <h2 className="text-lg font-bold text-slate-900">Thay đổi so với quy định trước</h2>
+              <p className="mt-3 leading-7 text-slate-700">{document.changeSummary || "Chưa xác định được thay đổi so với văn bản trước."}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 p-5">
+              <h2 className="text-lg font-bold text-slate-900">Điểm nổi bật</h2>
+              {document.highlights.length ? (
+                <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+                  {document.highlights.map((highlight) => <li key={highlight} className="flex gap-2"><span className="text-emerald-700">•</span><span>{highlight}</span></li>)}
+                </ul>
+              ) : <p className="mt-3 text-sm text-slate-500">Chưa có điểm nổi bật được xác định.</p>}
+            </div>
+          </section>
           <section className="mt-8"><h2 className="text-lg font-semibold text-slate-900">Nội dung văn bản</h2><div className="mt-3 whitespace-pre-line rounded-2xl border border-slate-200 bg-slate-50 p-5 text-slate-700">{document.content || "Nội dung chưa được tải."}</div></section>
           <div className="mt-8 grid gap-6 lg:grid-cols-2">
             <section className="rounded-2xl border border-slate-200 p-5"><h3 className="text-lg font-semibold text-slate-900">Từ khóa</h3><div className="mt-3 flex flex-wrap gap-2">{document.keywords.length ? document.keywords.map((keyword) => <span key={keyword} className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">{keyword}</span>) : <span className="text-sm text-slate-500">Chưa có từ khóa.</span>}</div></section>

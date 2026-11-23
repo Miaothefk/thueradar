@@ -98,6 +98,12 @@ model Document {
   taxTopic            String?
   summary             String?
   keywords            String[]          @default([])
+  changeSummary       String?
+  highlights          String[]          @default([])
+  replacedDocumentNumber String?
+  replacementDocumentNumber String?
+  analysisMethod      String?
+  analysisCheckedAt   DateTime?
   effectiveAt         DateTime?
   legalStatus         LegalStatus       @default(UNKNOWN)
   validityCheckedAt   DateTime?

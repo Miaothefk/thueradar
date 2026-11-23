@@ -269,6 +269,92 @@ async function extractPdfText(bytes) {
   }
 }
 
+function conciseFallbackSummary(document) {
+  const sourceText = document.pdfText || document.content || "";
+  const clean = sourceText.replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  const sentences = clean.match(/[^.!?]+[.!?]+/g);
+  if (sentences?.length) {
+    const summary = sentences.slice(0, 3).join(" ").trim();
+    return summary.length <= 700 ? summary : `${summary.slice(0, 697)}...`;
+  }
+  return clean.length <= 700 ? clean : `${clean.slice(0, 697)}...`;
+}
+
+async function analyzeDocumentWithAi(document) {
+  if (!process.env.AZURE_OPENAI_API_KEY || !process.env.AZURE_OPENAI_ENDPOINT || !process.env.AZURE_OPENAI_DEPLOYMENT) {
+    return {
+      summary: conciseFallbackSummary(document),
+      changeSummary: "Chưa xác định được thay đổi so với văn bản trước.",
+      highlights: [],
+      legalStatus: document.legalStatus,
+      replacedDocumentNumber: null,
+      replacementDocumentNumber: null,
+      analysisMethod: "OFFICIAL_METADATA_INSUFFICIENT",
+    };
+  }
+
+  const text = (document.pdfText || document.content || "").slice(0, 50000);
+  const url = `${process.env.AZURE_OPENAI_ENDPOINT.replace(/\/$/, "")}/openai/deployments/${encodeURIComponent(process.env.AZURE_OPENAI_DEPLOYMENT)}/chat/completions?api-version=${encodeURIComponent(process.env.AZURE_OPENAI_API_VERSION || "2024-10-21")}`;
+  const prompt = [
+    "Phân tích văn bản pháp luật thuế Việt Nam chỉ dựa trên nội dung chính thức bên dưới.",
+    "Trả JSON thuần với các khóa: summary, changeSummary, highlights, legalStatus, replacedDocumentNumber, replacementDocumentNumber.",
+    "summary: 2-3 câu ngắn nêu nội dung chính.",
+    "changeSummary: nêu thay đổi so với văn bản trước nếu có bằng chứng; nếu không có bằng chứng ghi 'Chưa xác định được thay đổi so với văn bản trước'.",
+    "highlights: mảng tối đa 5 điểm nổi bật.",
+    "legalStatus: IN_FORCE, EXPIRED, REPEALED, SUPERSEDED hoặc UNKNOWN.",
+    "Chỉ chọn trạng thái khác UNKNOWN nếu nội dung hoặc metadata chính thức nêu rõ. Không suy đoán.",
+  ].join("\n");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": process.env.AZURE_OPENAI_API_KEY,
+      },
+      body: JSON.stringify({
+        temperature: 0,
+        messages: [
+          { role: "system", content: prompt },
+          { role: "user", content: `Tiêu đề: ${document.title}\nSố hiệu: ${document.documentNumber || ""}\nNội dung:\n${text}` },
+        ],
+      }),
+    });
+    if (!response.ok) throw new Error(`AI analysis HTTP ${response.status}`);
+    const body = await response.json();
+    const raw = body?.choices?.[0]?.message?.content;
+    if (!raw) throw new Error("AI analysis returned no content");
+    const parsed = JSON.parse(String(raw).replace(/^```json\s*/i, "").replace(/```$/i, "").trim());
+    const allowedStatuses = ["IN_FORCE", "EXPIRED", "REPEALED", "SUPERSEDED", "UNKNOWN"];
+    return {
+      summary: typeof parsed.summary === "string" ? parsed.summary.trim().slice(0, 1200) : conciseFallbackSummary(document),
+      changeSummary: typeof parsed.changeSummary === "string" ? parsed.changeSummary.trim().slice(0, 1500) : "Chưa xác định được thay đổi so với văn bản trước.",
+      highlights: Array.isArray(parsed.highlights) ? parsed.highlights.filter((item) => typeof item === "string").slice(0, 5) : [],
+      legalStatus: allowedStatuses.includes(parsed.legalStatus) ? parsed.legalStatus : "UNKNOWN",
+      replacedDocumentNumber: typeof parsed.replacedDocumentNumber === "string" ? parsed.replacedDocumentNumber : null,
+      replacementDocumentNumber: typeof parsed.replacementDocumentNumber === "string" ? parsed.replacementDocumentNumber : null,
+      analysisMethod: "AZURE_OPENAI_OFFICIAL_TEXT",
+    };
+  } catch (error) {
+    log("document_analysis_fallback", { title: document.title, error: error instanceof Error ? error.message : String(error) });
+    return {
+      summary: conciseFallbackSummary(document),
+      changeSummary: "Chưa xác định được thay đổi so với văn bản trước.",
+      highlights: [],
+      legalStatus: "UNKNOWN",
+      replacedDocumentNumber: null,
+      replacementDocumentNumber: null,
+      analysisMethod: "OFFICIAL_METADATA_INSUFFICIENT",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchWithRetry(url, requestInit = {}) {
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -396,6 +482,15 @@ async function main() {
         documentNumber: document.documentNumber,
         pdfChecksum: document.pdfChecksum,
       }));
+      const analysis = await analyzeDocumentWithAi(document);
+      document.summary = analysis.summary;
+      document.changeSummary = analysis.changeSummary;
+      document.highlights = analysis.highlights;
+      document.legalStatus = analysis.legalStatus;
+      document.replacedDocumentNumber = analysis.replacedDocumentNumber;
+      document.replacementDocumentNumber = analysis.replacementDocumentNumber;
+      document.analysisMethod = analysis.analysisMethod;
+      document.analysisCheckedAt = new Date().toISOString();
       items.push(document);
       log("item_fetched", {
         externalId: document.externalId,
@@ -446,9 +541,9 @@ async function main() {
     for (const item of items) {
       const existing = await prisma.document.findUnique({
         where: { sourceId_externalId: { sourceId: source.id, externalId: item.externalId } },
-        select: { id: true, checksum: true, validityCheckedAt: true },
+        select: { id: true, checksum: true, validityCheckedAt: true, summary: true, analysisCheckedAt: true },
       });
-      if (existing?.checksum === item.checksum && existing.validityCheckedAt) {
+      if (existing?.checksum === item.checksum && existing.validityCheckedAt && existing.summary && existing.analysisCheckedAt) {
         skipped += 1;
         continue;
       }
@@ -457,23 +552,38 @@ async function main() {
         create: {
           title: item.title, content: item.content, documentNumber: item.documentNumber,
           documentType: item.documentType, issuingAuthority: item.issuingAuthority, taxTopic: item.taxTopic,
+          summary: item.summary,
+          highlights: item.highlights || [],
+          changeSummary: item.changeSummary,
+          replacedDocumentNumber: item.replacedDocumentNumber,
+          replacementDocumentNumber: item.replacementDocumentNumber,
+          analysisMethod: item.analysisMethod,
+          analysisCheckedAt: item.analysisCheckedAt ? new Date(item.analysisCheckedAt) : null,
           effectiveAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
           legalStatus: item.legalStatus,
           validityCheckedAt: new Date(item.validityCheckedAt),
           validityEvidenceUrl: item.validityEvidenceUrl,
           validityMethod: item.validityMethod,
           sourceUpdatedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
-          externalId: item.externalId, checksum: item.checksum, sourceId: source.id, status: "DRAFT",
+          externalId: item.externalId, checksum: item.checksum, sourceId: source.id, status: "VERIFIED",
         },
         update: {
           title: item.title,
           content: item.content,
           checksum: item.checksum,
+          summary: item.summary,
+          highlights: item.highlights || [],
+          changeSummary: item.changeSummary,
+          replacedDocumentNumber: item.replacedDocumentNumber,
+          replacementDocumentNumber: item.replacementDocumentNumber,
+          analysisMethod: item.analysisMethod,
+          analysisCheckedAt: item.analysisCheckedAt ? new Date(item.analysisCheckedAt) : null,
           legalStatus: item.legalStatus,
           validityCheckedAt: new Date(item.validityCheckedAt),
           validityEvidenceUrl: item.validityEvidenceUrl,
           validityMethod: item.validityMethod,
           sourceUpdatedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
+          status: "VERIFIED",
         },
       });
       const document = await prisma.document.findUniqueOrThrow({
