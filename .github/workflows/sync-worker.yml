@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -39,3 +39,4 @@ jobs:
           SOURCE_ACCESS_APPROVED: "1"
           SYNC_TIMEZONE: "Asia/Ho_Chi_Minh"
           SYNC_SCHEDULE_HOUR: "2"
+          NODE_OPTIONS: "--use-system-ca"

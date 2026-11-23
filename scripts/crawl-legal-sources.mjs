@@ -37,7 +37,7 @@ const dryRun = !args.has("--live");
 const maxPages = Math.max(1, Number.parseInt(valueFor("max-pages", "1"), 10) || 1);
 const maxItems = Math.max(1, Number.parseInt(valueFor("max-items", "20"), 10) || 20);
 const delayMs = Math.max(250, Number.parseInt(valueFor("delay-ms", "1500"), 10) || 1500);
-const timeoutMs = Math.max(1000, Number.parseInt(valueFor("timeout-ms", "10000"), 10) || 10000);
+const timeoutMs = Math.max(1000, Number.parseInt(valueFor("timeout-ms", "30000"), 10) || 30000);
 const retries = Math.max(0, Number.parseInt(valueFor("retries", "2"), 10) || 0);
 const maxPdfBytes = Math.max(1024 * 1024, Number.parseInt(valueFor("max-pdf-bytes", "15000000"), 10) || 15000000);
 
@@ -54,6 +54,13 @@ function sha256(value) {
 function sha256Buffer(value) {
   return createHash("sha256").update(value).digest("hex");
 }
+
+const publicBrowserHeaders = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
+  "Referer": "https://gdt.gov.vn/",
+};
 
 function stripHtml(value) {
   return value
@@ -169,7 +176,7 @@ async function fetchBinaryWithRetry(url) {
     try {
       const response = await fetch(url, {
         signal: controller.signal,
-        headers: { "User-Agent": "ThueRadarResearchBot/0.1 (+legal-source-review)" },
+        headers: publicBrowserHeaders,
       });
       if (!response.ok) throw new Error(`PDF HTTP ${response.status}`);
       const contentType = response.headers.get("content-type")?.toLowerCase() || "";
@@ -211,7 +218,7 @@ async function fetchWithRetry(url, requestInit = {}) {
         signal: controller.signal,
         ...requestInit,
         headers: {
-          "User-Agent": "ThueRadarResearchBot/0.1 (+legal-source-review)",
+          ...publicBrowserHeaders,
           ...(requestInit.headers || {}),
         },
       });
