@@ -9,7 +9,7 @@ Set-Location $repo
 
 $envFile = Join-Path $repo ".env.local"
 if (-not (Test-Path $envFile)) {
-  throw "Không tìm thấy .env.local trong thư mục dự án."
+  throw "Missing .env.local in the project directory."
 }
 
 Get-Content $envFile | Where-Object { $_ -match "^\s*[A-Za-z_][A-Za-z0-9_]*=" } | ForEach-Object {
@@ -18,7 +18,7 @@ Get-Content $envFile | Where-Object { $_ -match "^\s*[A-Za-z_][A-Za-z0-9_]*=" } 
 }
 
 if (-not $env:DATABASE_URL) {
-  throw "DATABASE_URL chưa được cấu hình trong .env.local."
+  throw "DATABASE_URL is not configured in .env.local."
 }
 
 $env:NODE_OPTIONS = "--use-system-ca"
@@ -26,19 +26,35 @@ $env:SOURCE_ACCESS_APPROVED = "1"
 $env:SYNC_TIMEZONE = "Asia/Ho_Chi_Minh"
 $env:SYNC_SCHEDULE_HOUR = "2"
 
-$argument = if ($Mode -eq "Manual") { "--manual" } else { "--scheduled" }
-$command = "cd /d `"$repo`" && node --use-system-ca scripts/sync-worker.mjs $argument"
-
 if ($Mode -eq "Scheduled") {
-  schtasks /Create /TN "ThueRadar Daily Legal Sync" /TR "cmd.exe /d /c `"$command`"" /SC DAILY /ST 02:00 /F
-  if ($LASTEXITCODE -ne 0) {
-    throw "Không thể tạo Windows Task Scheduler. Hãy chạy PowerShell bằng quyền Administrator."
+  $scriptPath = Join-Path $PSScriptRoot "setup-windows-scheduler.ps1"
+  $action = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -Mode Manual" `
+    -WorkingDirectory $repo
+  $trigger = New-ScheduledTaskTrigger -Daily -At "02:00"
+  $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable
+  $principal = New-ScheduledTaskPrincipal `
+    -UserId $env:USERDOMAIN\$env:USERNAME `
+    -LogonType Interactive `
+    -RunLevel Highest
+
+  $existing = Get-ScheduledTask -TaskName "ThueRadar Daily Legal Sync" -ErrorAction SilentlyContinue
+  if ($existing) {
+    Unregister-ScheduledTask -TaskName "ThueRadar Daily Legal Sync" -Confirm:$false
   }
-  Write-Host "Đã tạo lịch chạy ThueRadar vào 02:00 giờ máy mỗi ngày."
+  Register-ScheduledTask `
+    -TaskName "ThueRadar Daily Legal Sync" `
+    -Action $action `
+    -Trigger $trigger `
+    -Settings $settings `
+    -Principal $principal `
+    -ErrorAction Stop | Out-Null
+  Write-Host "Created ThueRadar Daily Legal Sync at 02:00."
 } else {
   & node --use-system-ca scripts/sync-worker.mjs --manual
   if ($LASTEXITCODE -ne 0) {
-    throw "Worker đồng bộ thất bại. Kiểm tra log JSON và SchedulerRun."
+    throw "Sync worker failed. Check JSON logs and SchedulerRun."
   }
-  Write-Host "Worker đồng bộ hoàn tất. Kiểm tra SchedulerRun.status = COMPLETED."
+  Write-Host "Sync worker completed. Check SchedulerRun.status = COMPLETED."
 }
