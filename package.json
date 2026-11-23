@@ -12,6 +12,7 @@
     "test:phase8": "node --test tests/phase8-api.test.mjs tests/phase8-guards.test.mjs",
     "test:e2e": "playwright test",
     "sync:worker": "node scripts/sync-worker.mjs --scheduled",
+    "sync:worker:force": "node scripts/sync-worker.mjs --manual --force",
     "crawl:sources": "node scripts/crawl-legal-sources.mjs --dry-run"
   },
   "dependencies": {

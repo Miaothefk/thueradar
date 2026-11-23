@@ -13,6 +13,7 @@ const crawlerTimeoutMs = Math.max(1000, Number.parseInt(process.env.CRAWLER_TIME
 const crawlerRetries = Math.max(0, Number.parseInt(process.env.CRAWLER_RETRIES || "2", 10) || 2);
 const isScheduled = process.argv.includes("--scheduled");
 const isManual = process.argv.includes("--manual");
+const force = process.argv.includes("--force");
 
 function log(event, details = {}) {
   console.log(JSON.stringify({ timestamp: new Date().toISOString(), event, ...details }));
@@ -116,7 +117,7 @@ export async function runSyncWorker({ trigger = isManual ? "manual" : "scheduled
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 
 if (isMain) {
-  runSyncWorker()
+  runSyncWorker({ force })
     .then((result) => {
       log("worker_finished", result);
       process.exitCode = result.status?.startsWith("SKIPPED") || result.status?.startsWith("ALREADY") || result.status === "COMPLETED" ? 0 : 1;

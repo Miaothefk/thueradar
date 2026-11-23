@@ -27,6 +27,12 @@ Ngoài ra, `POST /api/admin/sync` cho phép ADMIN đã đăng nhập xếp một
 
 ## Cấu hình production
 
+Do GitHub-hosted runners ở khu vực cloud không truy cập ổn định được GDT, GitHub Actions phải
+chạy trên một self-hosted runner đã đăng ký với nhãn `thueradar-sync`, hoặc worker nên chạy
+bằng Windows Task Scheduler trên máy luôn có kết nối mạng đến GDT.
+
+Không coi workflow GitHub-hosted chạy `ubuntu-latest` là chứng cứ crawl thành công.
+
 Chọn một scheduler của nền tảng triển khai để gọi:
 
 ```bash
